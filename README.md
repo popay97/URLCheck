@@ -1,3 +1,16 @@
+Instructions for setting up the project:
+
+1. Clone the project from the repository
+2. Run the command "composer install" in the project directory
+3. Create a MySql database and configure the connection in the .env file
+4. Run the command "php artisan migrate:refresh" in the project directory
+5. Run the command "php artisan db:seed" in the project directory
+6. Run the command "php artisan serve" in the project directory
+7. run the cron job "php artisan schedule:work" in the project directory
+
+
+
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">
