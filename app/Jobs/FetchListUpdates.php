@@ -114,7 +114,7 @@ class FetchListUpdates implements ShouldQueue
     {
         $outer = $loopState['i'];
         $inner = $loopState['j'];
-        if ($inner < count($regions) - 2) {
+        if ($inner < count($regions) - 1) {
             $inner++;
         } else {
             $inner = 0;
@@ -132,13 +132,13 @@ class FetchListUpdates implements ShouldQueue
         $outer = $loop['i'];
         $inner = $loop['j'];
         error_log('outer: ' . $outer . ' inner: ' . $inner);
-        /* if ($minWaitDuration > 0) {
+        if ($minWaitDuration > 0) {
             sleep($minWaitDuration);
-        } */
+        }
         $lists = Lists::all();
         error_log('outer: ' . $outer . ' inner: ' . $inner);
         for ($i = $outer; $i < count($lists); $i++) {
-            for ($j = $inner; $j < count($regions) - 1; $j++) {
+            for ($j = $inner; $j < count($regions); $j++) {
                 $response = Http::withHeaders([
                     'Content-Type' => 'application/json'
                 ])->post('https://safebrowsing.googleapis.com/v4/threatListUpdates:fetch?key=' . config('global.google_api_key'), [
@@ -159,14 +159,11 @@ class FetchListUpdates implements ShouldQueue
                         ]
                     ]
                 ]);
-                //save the i and j to varable called a loopState, if a wait duration is issues by api, we need to schedule a job to continue from the loopState
                 $loopState = [
                     'i' => $i,
                     'j' => $j
                 ];
-                error_log('loopState: ' . $loopState['i'] . ' ' . $loopState['j']);
                 $data = json_decode($response->body(), true);
-                //if there is not listUpdateResponses, then there is no update for this list
                 if (!array_key_exists('listUpdateResponses', $data)) {
                     error_log('no listUpdateResponses');
                     continue;
@@ -180,22 +177,17 @@ class FetchListUpdates implements ShouldQueue
                     $this->partialUpdate($data['listUpdateResponses'][0], $lists[$i]);
                 }
                 //check if minWaitDuration exists
-                /* if ($minWaitDuration != null && $minWaitDuration != '') {
+                if ($minWaitDuration != null && $minWaitDuration != '') {
                     $minWaitDuration = substr($data['minimumWaitDuration'], 0, -1);
                     $minWaitDuration = (int)$minWaitDuration;
-                    if ($minWaitDuration > 0) {
-                        error_log('wait duration: ' . $minWaitDuration);
-                        error_log('loopStateBefore: ' . $loopState['i'] . ' ' . $loopState['j']);
-                        FetchListUpdates::dispatch($loopState, $minWaitDuration);
-                        break;
-                    }
                 } else {
                     $minWaitDuration = 0;
-                } */
+                }
             }
-            /*  if ($minWaitDuration > 0) {
-                break;
-            } */
+            if ($minWaitDuration > 0) {
+                FetchListUpdates::dispatch($loopState, $minWaitDuration);
+                return;
+            }
         }
         if ($outer == count($lists) - 1 && $inner == count($regions) - 1) {
             Config::set('global.dbUpdateInProgress', 0);

@@ -8,6 +8,7 @@ use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use App\Models\Lists;
+use App\Models\Threats;
 use Illuminate\Routing\Controller as BaseController;
 //import Request class
 use Illuminate\Http\Request;
@@ -163,9 +164,7 @@ class CheckUrlController extends BaseController
     {
         $url = $request->input('url');
         if (Config::get('global.dbUpdateInProgress') == 1 || Config::get('global.dbUpdateInProgress') == 0) {
-            //database update in progress, use loopup api to check if url is safe
-            //POST https://safebrowsing.googleapis.com/v4/threatMatches:find?key=API_KEY HTTP/1.1
-            //Content-Type: application/json
+            //database update in progress, use lookup api to check if url is safe
             $threatTypes = ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION', 'THREAT_TYPE_UNSPECIFIED'];
             $platformTypes = ['WINDOWS', 'LINUX', 'ANDROID', 'OSX', 'IOS', 'CHROME'];
             $response = Http::withHeaders([
@@ -192,6 +191,9 @@ class CheckUrlController extends BaseController
                 if (empty($data)) {
                     return response()->json(['status' => 'safe']);
                 } else {
+                    foreach ($data['matches'] as $match) {
+                        $lists[] = ['platform_type' => $match['platformType'], 'threat_type' => $match['threatType'], 'threat_entry_type' => $match['threatEntryType']];
+                    }
                     return response()->json(['status' => 'unsafe', 'lists' => $lists]);
                 }
             } else {
@@ -199,14 +201,70 @@ class CheckUrlController extends BaseController
             }
         }
         $url = $this->Canonicalize($url);
-        $expressions = $this->computePrefixSufix($url);
+        $expressions = $this->getPrefixSuffixExpressions($url);
         $hashes = $this->getHashes($expressions);
         $prefixes = $this->getHashPrefixes($hashes, 4);
         $prefixes = array_unique($prefixes);
-        $url = $this->Canonicalize($url);
-        $expressions = $this->computePrefixSufix($url);
-        $hashes = $this->getHashes($expressions);
-        $prefixes = $this->getHashPrefixes($hashes, 4);
-        $prefixes = array_unique($prefixes);
+        $threats = Threats::whereIn('hash', $prefixes)->get();
+        $lists = [];
+
+        foreach ($threats as $threat) {
+            $lists[] = Lists::where('id', $threat->list_id)->first();
+        }
+        array_unique($lists);
+        if (empty($lists)) {
+            return response()->json(['status' => 'safe']);
+        } else {
+            //check against fullHashes.find google api to see if url is safe
+            $threatTypes = [];
+            $platformTypes = [];
+            $threatEnytyTypes = [];
+            $clientStates = [];
+            foreach ($lists as $list) {
+                $threatTypes[] = $list->threat_type;
+                $platformTypes[] = $list->platform_type;
+                $threatEnytyTypes[] = $list->threat_entry_type;
+                $clientStates[] = $list->state;
+            }
+            $threatTypes = array_unique($threatTypes);
+            $platformTypes = array_unique($platformTypes);
+            $threatEnytyTypes = array_unique($threatEnytyTypes);
+            $threatEntries = [];
+            foreach ($threats as $threat) {
+                $threatEntries[] = ['hash' => $threat->hash];
+            }
+
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->post('https://safebrowsing.googleapis.com/v4/fullHashes:find?key=' . Config::get('global.google_api_key'), [
+                'client' => [
+                    'clientId' => 'urlcheck',
+                    'clientVersion' => '1.0.0',
+                ],
+                'clientStates' => $clientStates,
+                'threatInfo' => [
+                    'threatTypes' => $threatTypes,
+                    'platformTypes' => $platformTypes,
+                    'threatEntryTypes' => $threatEnytyTypes,
+                    'threatEntries' => $threatEntries,
+                ],
+            ]);
+
+            if ($response->successful()) {
+                $data = json_decode($response->body(), true);
+                //if data contains no keys, url is safe
+                if (empty($data)) {
+                    return response()->json(['status' => 'safe']);
+                } else {
+                    $listsToReturn = [];
+                    foreach ($data['matches'] as $match) {
+                        $listsToReturn[] = ['platform_type' => $match['platformType'], 'threat_type' => $match['threatType'], 'threat_entry_type' => $match['threatEntryType']];
+                    }
+                    return response()->json(['status' => 'unsafe', 'lists' => $listsToReturn]);
+                }
+            } else {
+                return response()->json(['status' => 'server_unreachable']);
+            }
+        }
     }
 }

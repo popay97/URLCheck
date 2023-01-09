@@ -119,9 +119,7 @@ class hashFiller extends Command
         $lists = Lists::all();
         $minWaitDuration = 0;
         $loopState = [];
-        error_log(Config::get('global.dbUpdateInProgress'));
         Config::set('global.dbUpdateInProgress', 1);
-        error_log(Config::get('global.dbUpdateInProgress'));
         for ($i = 0; $i < count($lists); $i++) {
             for ($j = 0; $j < count($regions); $j++) {
                 $response = Http::withHeaders([
@@ -165,19 +163,12 @@ class hashFiller extends Command
                 if ($minWaitDuration != null && $minWaitDuration != '') {
                     $minWaitDuration = substr($data['minimumWaitDuration'], 0, -1);
                     $minWaitDuration = (int)$minWaitDuration;
-                    if ($minWaitDuration > 0) {
-                        error_log('wait duration: ' . $minWaitDuration);
-                        FetchListUpdates::dispatch($loopState, $minWaitDuration);
-                    }
                 } else {
                     $minWaitDuration = 0;
                 }
-                if ($minWaitDuration > 0) {
-                    break;
-                }
             }
             if ($minWaitDuration > 0) {
-                break;
+                FetchListUpdates::dispatch($loopState, $minWaitDuration);
             }
         }
         //check if loopState indices are at the end of the array, if so, set dbUpdateInProgress to false
