@@ -163,7 +163,7 @@ class CheckUrlController extends BaseController
     public function checkUrl(Request $request)
     {
         $url = $request->input('url');
-        if (Config::get('global.dbUpdateInProgress') == 1 || Config::get('global.dbUpdateInProgress') == 0) {
+        if (Config::get('global.dbUpdateInProgress') == 1) {
             //database update in progress, use lookup api to check if url is safe
             $threatTypes = ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION', 'THREAT_TYPE_UNSPECIFIED'];
             $platformTypes = ['WINDOWS', 'LINUX', 'ANDROID', 'OSX', 'IOS', 'CHROME'];

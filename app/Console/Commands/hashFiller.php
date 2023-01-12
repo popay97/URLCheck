@@ -169,6 +169,7 @@ class hashFiller extends Command
             }
             if ($minWaitDuration > 0) {
                 FetchListUpdates::dispatch($loopState, $minWaitDuration);
+                return;
             }
         }
         //check if loopState indices are at the end of the array, if so, set dbUpdateInProgress to false
